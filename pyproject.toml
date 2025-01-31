@@ -1,0 +1,86 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "airtools"
+dynamic = ["version"]
+description = 'Tools to retrieve sensors data, query them through an API, make reports/graphs'
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT or Apache-2.0"
+keywords = []
+authors = [
+  { name = "fburatta", email = "fabrizio@moldiscovery.com" },
+]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Intended Audience :: Other Audience",
+  "License :: Freely Distributable",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Utilities",
+]
+
+[tool.hatch.envs.default]
+dependencies = [
+  "pip",   # in order to use pip list from the env
+  "rq",
+  "rq-dashboard",
+]
+
+[project.urls]
+Documentation = "https://github.com/fabfacts/airtools#readme"
+Issues = "https://github.com/fabfacts/airtools/issues"
+Source = "https://github.com/fabfacts/airtools"
+
+[tool.hatch.version]
+path = "VERSION.txt"
+pattern = "(?P<version>.+)"
+
+[tool.hatch.build.targets.sdist]
+include = ["/airtools", "/VERSION.txt"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["airtools"]
+
+[tool.hatch.envs.test]
+installer = "uv"
+extra-dependencies = [
+  "coverage[toml]",
+  "pytest",
+  "pytest-cov",
+  "pytest-mock",
+  "mypy>=1.0.0",
+]
+
+[tool.hatch.envs.test.scripts]
+types = "mypy --install-types --non-interactive {args:src/airtools tests}"
+unit = 'pytest --cov-report xml:coverage.xml --cov="airtools" -m "slow" {args:test}'
+
+[tool.coverage.run]
+source_pkgs = ["airtools", "tests"]
+branch = true
+parallel = true
+omit = [
+  "src/airtools/__about__.py",
+]
+
+[tool.coverage.paths]
+airtools = ["airtools"]
+tests = ["tests", "*/airtools/tests"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "no cov",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+]

@@ -1,0 +1,3 @@
+dist/
+# pyenv file
+.python-version
