@@ -35,6 +35,8 @@ dependencies = [
   "pip",   # in order to use pip list from the env
   "rq",
   "rq-dashboard",
+  "requests",
+  "pandas"
 ]
 
 [project.urls]

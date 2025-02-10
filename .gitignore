@@ -1,3 +1,4 @@
 dist/
 # pyenv file
 .python-version
+*.pyc

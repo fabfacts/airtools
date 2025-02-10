@@ -18,8 +18,8 @@ repos:
   hooks:
   - id: codespell
     exclude: "^bin_mocks/|^admin-tools/subDBgen"
-    args: ["-I", ".codespell.ignore",
-           "--skip", "*.conf"]
+    # args: ["-I", ".codespell.ignore",
+    #        "--skip", "*.conf"]
 
 -   repo: https://github.com/psf/black
     rev: 24.10.0
