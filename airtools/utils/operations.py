@@ -118,7 +118,9 @@ def parse_data(
             )
             sensor_field_avg_count += 1
 
-        average_out[field] = sensor_field_avg
+        average_out[field] = round(
+            sensor_field_avg / sensor_field_avg_count, 1
+        )
         average_out[f"{field}_max"] = sensor_field_max
         average_out[f"{field}_min"] = sensor_field_min
 
