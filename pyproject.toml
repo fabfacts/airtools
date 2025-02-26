@@ -36,7 +36,9 @@ dependencies = [
   "rq",
   "rq-dashboard",
   "requests",
-  "pandas"
+  "pandas",
+  "sqlmodel", # database ORM
+  "fastapi[standard]" # API
 ]
 
 [project.urls]
