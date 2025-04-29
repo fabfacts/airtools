@@ -12,7 +12,7 @@ class User(SQLModel, table=True):
         table (bool, optional): _description_. Defaults to True.
     """
 
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     first_name: str
     last_name: str
     username: str

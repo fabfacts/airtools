@@ -49,7 +49,5 @@ def test_user_create(session: Session, client: TestClient):
 
     assert response.status_code == 204
 
-    statement = select(User)
-    results = session.exec(statement)
-    for user in results:
-        print(user.first_name)
+    statement = select(User).where(User.id == 1)
+    assert session.exec(statement).one()
