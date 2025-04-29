@@ -1,7 +1,12 @@
+import logging
+
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, Query
 from sqlmodel import create_engine, SQLModel, Session, select
 from airtools.models.users import User
+
+# from airtools.components.scheduler.core import get_scheduler
+logger = logging.getLogger("uvicorn.error")
 
 sqlite_file_name = "database.db"
 sqlite_url = f"sqlite:///{sqlite_file_name}"
@@ -37,6 +42,13 @@ async def lifespan(app: FastAPI):
         app (FastAPI): _description_
     """
     create_db_and_tables()
+    # start scheduler
+    # scheduler = get_scheduler()
+    # scheduler.start()
+    yield
+    logger.info("app shutdown")
+    # close the scheduler on exit
+    # scheduler.shutdown()
 
 
 # start FastAPI
@@ -52,3 +64,18 @@ def users_list(
 ):
     users = session.exec(select(User).offset(offset).limit(limit)).all()
     return users
+
+
+@app.post("/users/", status_code=204)
+def create_user(*, session: Session = Depends(get_session), user: User):
+    """
+    Create user
+
+    Args:
+        user (User): User Model
+    """
+    valid_user = User.model_validate(user)
+    session.add(valid_user)
+    session.commit()
+    session.refresh(valid_user)
+    return user

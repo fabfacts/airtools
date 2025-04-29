@@ -38,7 +38,8 @@ dependencies = [
   "requests",
   "pandas",
   "sqlmodel", # database ORM
-  "fastapi[standard]" # API
+  "fastapi[standard]", # API
+  "apscheduler"
 ]
 
 [project.urls]

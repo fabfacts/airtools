@@ -22,4 +22,14 @@ class User(SQLModel, table=True):
     lan: str
     city: str
     age: Optional[int] = None
-    last_check: datetime = Field(default_factory=datetime.now, nullable=False)
+    last_check: Optional[datetime] = Field(
+        default_factory=datetime.now, nullable=False
+    )
+
+
+class UserPublic(User):
+    """
+    Data returned in the response
+    """
+
+    id: int
