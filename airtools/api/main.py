@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, Query
 from sqlmodel import create_engine, SQLModel, Session, select
 from airtools.models.users import User
+from airtools.models.sensors import Sensor
 
 # from airtools.components.scheduler.core import get_scheduler
 logger = logging.getLogger("uvicorn.error")
@@ -79,3 +80,19 @@ def create_user(*, session: Session = Depends(get_session), user: User):
     session.commit()
     session.refresh(valid_user)
     return user
+
+
+@app.post("/sensors/", status_code=204)
+def create_sensor(*, session: Session = Depends(get_session), sensor: Sensor):
+    """
+    Create Sensor
+
+    Args:
+        user (Sensor): _description_
+        session (Session, optional): _description_. Defaults to Depends(get_session).
+    """
+    valid = Sensor.model_validate(sensor)
+    session.add(valid)
+    session.commit()
+    session.refresh(valid)
+    return valid
