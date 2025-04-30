@@ -35,9 +35,7 @@ def download(unitid: int, sensor_type: SensorType, date: str, url: Url) -> str:
     """
     abs_url: Url = f"{url}/{date}_{sensor_type}_{unitid}.csv"
 
-    res = requests.get(
-        abs_url,
-    )
+    res = requests.get(abs_url, timeout=60)
 
     if res.status_code != 200:
         logger.error("Download failed for %s", abs_url)
