@@ -22,11 +22,3 @@ class User(SQLModel, table=True):
     last_check: Optional[datetime] = Field(
         default_factory=datetime.now, nullable=False
     )
-
-
-class UserPublic(User):
-    """
-    Data returned in the response
-    """
-
-    id: int
