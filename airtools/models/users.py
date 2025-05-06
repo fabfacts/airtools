@@ -16,7 +16,7 @@ class User(SQLModel, table=True):
     first_name: str
     last_name: str
     username: str
-    password: str
+    # password: str
     sensor_id: int | None = Field(default=None, foreign_key="sensor.id")
     age: Optional[int] = None
     last_check: Optional[datetime] = Field(

@@ -27,6 +27,7 @@ def test_list_users(session: Session, client: TestClient):
     data = response.json()[0]
 
     assert response.status_code == 200
+    print(data)
     assert data["first_name"] == "foo"
     assert data["last_check"] == last_mod_date.strftime("%Y-%m-%dT%H:%M:%S")
 

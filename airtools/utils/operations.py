@@ -64,7 +64,7 @@ def parse_data(
         data (TextIOBase): Text file Object
 
     Returns:
-        Tuple[str,str,str]: _description_
+        Tuple[str,str,str]: Tuple containing the average, min and max value
     """
     default_fields: list = [
         "sensor_id",

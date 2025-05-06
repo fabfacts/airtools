@@ -2,6 +2,7 @@ import logging
 
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, Query
+from fastapi.responses import RedirectResponse
 from sqlmodel import create_engine, SQLModel, Session, select
 from airtools.models.users import User
 from airtools.models.sensors import Sensor
@@ -54,6 +55,11 @@ async def lifespan(app: FastAPI):
 
 # start FastAPI
 app = FastAPI(lifespan=lifespan)
+
+
+@app.get("/", include_in_schema=False)
+def root():
+    return RedirectResponse(url="/docs")
 
 
 @app.get("/users/", response_model=list[User])

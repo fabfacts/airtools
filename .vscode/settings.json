@@ -1,0 +1,8 @@
+{
+    "python.pythonPath": "/home/faburo/.local/share/hatch/env/virtual/airtools/2Anm22N1/test/bin/python",
+    "python.testing.pytestArgs": [
+        "tests"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true,
+}
