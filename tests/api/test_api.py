@@ -39,6 +39,9 @@ def test_list_users(session: Session, client: TestClient):
     session.refresh(testuser)
 
     response = client.get("/users/")
+
+    print(response.json())
+
     data = response.json()[0]
 
     assert response.status_code == 200

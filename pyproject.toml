@@ -65,6 +65,7 @@ extra-dependencies = [
   "pytest-cov",
   "pytest-mock",
   "mypy>=1.0.0",
+  "alembic",   # sqlalchemy migrations
 ]
 
 [tool.hatch.envs.test.scripts]

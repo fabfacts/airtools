@@ -83,7 +83,9 @@ def users_list(
         select(User).options(selectinload(User.sensors))
     ).all()
 
-    # users = session.exec(select(User, Sensor).where(User.sensor_id == Sensor.id))
+    # for u in users:
+    #     print('test', u)
+
     return users
 
 
