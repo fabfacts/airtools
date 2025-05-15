@@ -3,9 +3,10 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends, Query
 from fastapi.responses import RedirectResponse
+from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import create_engine, SQLModel, Session, select
-from airtools.models.users import User
-from airtools.models.sensors import Sensor
+from sqlalchemy.orm import selectinload
+from airtools.models.core import User, UserOut, Sensor
 
 # from airtools.components.scheduler.core import get_scheduler
 logger = logging.getLogger("uvicorn.error")
@@ -55,6 +56,15 @@ async def lifespan(app: FastAPI):
 
 # start FastAPI
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "*"
+    ],  # Replace "*" with specific origins for security, e.g. ["http://localhost:3000"]
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/", include_in_schema=False)
@@ -62,14 +72,18 @@ def root():
     return RedirectResponse(url="/docs")
 
 
-@app.get("/users/", response_model=list[User])
+@app.get("/users/", response_model=list[UserOut])
 def users_list(
     *,
     session: Session = Depends(get_session),
     offset: int = 0,
     limit: int = Query(default=100, le=100),
 ):
-    users = session.exec(select(User).offset(offset).limit(limit)).all()
+    users = session.exec(
+        select(User).options(selectinload(User.sensors))
+    ).all()
+
+    # users = session.exec(select(User, Sensor).where(User.sensor_id == Sensor.id))
     return users
 
 

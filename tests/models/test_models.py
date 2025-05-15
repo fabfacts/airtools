@@ -1,7 +1,7 @@
 # pylint: disable=missing-docstring
 
 from datetime import date
-from airtools.models.users import User
+from airtools.models.core import User
 
 
 def test_create_user():

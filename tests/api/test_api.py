@@ -3,33 +3,48 @@
 from datetime import datetime
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
-from airtools.models.users import User
-from airtools.models.sensors import Sensor
+from airtools.models.core import User, Sensor
 
 
 def test_list_users(session: Session, client: TestClient):
     last_mod_date = datetime(2022, 6, 29, 8, 14, 53)
+
+    sens1 = Sensor(
+        uid="11111",
+        name="sens1",
+        lon="1.1111",
+        lat="1.2222",
+        city="Alessandria",
+    )
+
+    sens2 = Sensor(
+        uid="22222",
+        name="sens2",
+        lon="1.1111",
+        lat="1.2222",
+        city="Alessandria",
+    )
+
     testuser = User(
         first_name="foo",
         last_name="bar",
         username="foobar",
         password="123456",
-        sensorid="sid",
-        lon="1.1111",
-        lan="1.2222",
-        city="Alessandria",
+        sensors=[sens1, sens2],
         last_check=last_mod_date,
     )
+
     session.add(testuser)
     session.commit()
+    session.refresh(testuser)
 
     response = client.get("/users/")
     data = response.json()[0]
 
     assert response.status_code == 200
-    print(data)
     assert data["first_name"] == "foo"
     assert data["last_check"] == last_mod_date.strftime("%Y-%m-%dT%H:%M:%S")
+    assert len(data["sensors"]) == 2
 
 
 def test_user_create(session: Session, client: TestClient):
@@ -53,9 +68,10 @@ def test_user_create(session: Session, client: TestClient):
 
 def test_user_sensor_create(session: Session, client: TestClient):
     sensor = Sensor(
+        uid="11111",
         name="sensor",
         lon="1.1111",
-        lan="1.2222",
+        lat="1.2222",
         city="Alessandria",
     )
     session.add(sensor)
@@ -84,9 +100,10 @@ def test_user_sensor_create(session: Session, client: TestClient):
 
 def test_sensor_create(session: Session, client: TestClient):
     json_data = {
+        "uid": "11111",
         "name": "sensor",
         "lon": "0.12222",
-        "lan": "0.22222",
+        "lat": "0.22222",
         "city": "Ale",
     }
     session.commit()
