@@ -19,6 +19,10 @@ class SensorOut(BaseModel):
     city: str
 
 
+class SensorUpdate(BaseModel):
+    uid: str
+
+
 class UserOut(BaseModel):
     """
     Custom User API Output
@@ -31,9 +35,19 @@ class UserOut(BaseModel):
     first_name: str
     last_name: str
     username: str
-    sensors: list[SensorOut]
     age: Optional[int] = None
     last_check: Optional[datetime]
+
+
+class UserSensors(UserOut):
+    """
+    Custom User API Output with sensors
+
+    Args:
+        BaseModel (_type_): _description_
+    """
+
+    sensors: list[SensorOut]
 
 
 class User(SQLModel, table=True):

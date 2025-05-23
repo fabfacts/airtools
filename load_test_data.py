@@ -31,6 +31,14 @@ with Session(engine) as session:
         city="Alessandria",
     )
 
+    sens3 = Sensor(
+        uid="33333",
+        name="sens3",
+        lon="1.1111",
+        lat="1.2222",
+        city="Alessandria",
+    )
+
     testuser = User(
         first_name="foo",
         last_name="bar",
@@ -40,6 +48,16 @@ with Session(engine) as session:
         last_check=last_mod_date,
     )
 
+    testuser2 = User(
+        first_name="foo2",
+        last_name="bar2",
+        username="foobar2",
+        password="123456",
+        sensors=[sens3],
+        last_check=last_mod_date,
+    )
+
     session.add(testuser)
+    session.add(testuser2)
     session.commit()
     session.refresh(testuser)

@@ -1,12 +1,13 @@
 import logging
 
 from contextlib import asynccontextmanager
+from fastapi import HTTPException
 from fastapi import FastAPI, Depends, Query
 from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import create_engine, SQLModel, Session, select
 from sqlalchemy.orm import selectinload
-from airtools.models.core import User, UserOut, Sensor
+from airtools.models.core import User, UserOut, Sensor, UserSensors
 
 # from airtools.components.scheduler.core import get_scheduler
 logger = logging.getLogger("uvicorn.error")
@@ -83,13 +84,34 @@ def users_list(
         select(User).options(selectinload(User.sensors))
     ).all()
 
-    # for u in users:
-    #     print('test', u)
-
     return users
 
 
-@app.post("/users/", status_code=204)
+@app.get("/users/{user_id}", response_model=UserSensors)
+def userinfo(user_id: int, session: Session = Depends(get_session)):
+    """
+    Return user sensors
+
+    Args:
+        user_id (int): _description_
+        session (Session, optional): _description_. Defaults to Depends(get_session).
+
+    Returns:
+        _type_: _description_
+    """
+    user = session.exec(
+        select(User)
+        .options(selectinload(User.sensors))
+        .where(User.id == user_id)
+    ).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return user
+
+
+@app.post("/users/", status_code=201)
 def create_user(*, session: Session = Depends(get_session), user: User):
     """
     Create user
@@ -104,7 +126,29 @@ def create_user(*, session: Session = Depends(get_session), user: User):
     return user
 
 
-@app.post("/sensors/", status_code=204)
+@app.put("/addsensor/{user_id}/{sensor_id}", status_code=204)
+def update_user_sensor(
+    user_id: int, sensor_id: str, session: Session = Depends(get_session)
+) -> None:
+    """add existing sensor to existing user
+
+    Args:
+        user_id (int): _description_
+        sensor_id (str): _description_
+    """
+    user_obj = session.exec(select(User).where(User.id == user_id)).first()
+    sensor_obj = session.exec(
+        select(Sensor).where(Sensor.uid == sensor_id)
+    ).first()
+    print(sensor_obj.id)
+    # print(user_obj.id)
+    user_obj.sensors.append(sensor_obj)
+
+    session.add(user_obj)
+    session.commit()
+
+
+@app.post("/sensors/", status_code=201)
 def create_sensor(*, session: Session = Depends(get_session), sensor: Sensor):
     """
     Create Sensor

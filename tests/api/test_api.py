@@ -47,6 +47,48 @@ def test_list_users(session: Session, client: TestClient):
     assert response.status_code == 200
     assert data["first_name"] == "foo"
     assert data["last_check"] == last_mod_date.strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def test_user_sensors(session: Session, client: TestClient):
+    last_mod_date = datetime(2022, 6, 29, 8, 14, 53)
+
+    sens1 = Sensor(
+        uid="11111",
+        name="sens1",
+        lon="1.1111",
+        lat="1.2222",
+        city="Alessandria",
+    )
+
+    sens2 = Sensor(
+        uid="22222",
+        name="sens2",
+        lon="1.1111",
+        lat="1.2222",
+        city="Alessandria",
+    )
+
+    testuser = User(
+        first_name="foo",
+        last_name="bar",
+        username="foobar",
+        password="123456",
+        sensors=[sens1, sens2],
+        last_check=last_mod_date,
+    )
+
+    session.add(testuser)
+    session.commit()
+    session.refresh(testuser)
+
+    response = client.get(f"/users/{testuser.id}")
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["first_name"] == "foo"
+    assert data["last_check"] == last_mod_date.strftime("%Y-%m-%dT%H:%M:%S")
     assert len(data["sensors"]) == 2
 
 
@@ -63,42 +105,59 @@ def test_user_create(session: Session, client: TestClient):
         json=json_data,
     )
 
-    assert response.status_code == 204
+    assert response.status_code == 201
 
     statement = select(User).where(User.id == 1)
     assert session.exec(statement).one()
 
 
-def test_user_sensor_create(session: Session, client: TestClient):
-    sensor = Sensor(
+def test_user_sensor_associate(session: Session, client: TestClient):
+    last_mod_date = datetime(2022, 6, 29, 8, 14, 53)
+
+    testuser = User(
+        first_name="foo",
+        last_name="bar",
+        username="foobar",
+        password="123456",
+        sensors=[],
+        last_check=last_mod_date,
+    )
+
+    sens1 = Sensor(
         uid="11111",
         name="sensor",
         lon="1.1111",
         lat="1.2222",
         city="Alessandria",
     )
-    session.add(sensor)
-    session.commit()
 
-    json_data = {
-        "first_name": "foo",
-        "last_name": "foo",
-        "username": "foobar",
-        "password": "123456",
-        "sensor_id": sensor.id,
-    }
-
-    response = client.post(
-        "/users/",
-        json=json_data,
+    sens2 = Sensor(
+        uid="22222",
+        name="sens2",
+        lon="1.1111",
+        lat="1.2222",
+        city="Alessandria",
     )
 
+    session.add(testuser)
+    session.add(sens1)
+    session.add(sens2)
+    session.commit()
+
+    response = client.put(
+        f"/addsensor/{testuser.id}/{sens1.uid}",
+    )
     assert response.status_code == 204
 
-    statement = select(User).where(User.id == 1)
+    response = client.put(
+        f"/addsensor/{testuser.id}/{sens2.uid}",
+    )
+    assert response.status_code == 204
+
+    statement = select(User).where(User.id == testuser.id)
     user_obj = session.exec(statement).one()
-    assert user_obj.id == 1
-    assert user_obj.sensor_id == sensor.id
+    assert user_obj.username == testuser.username
+    assert len(user_obj.sensors) == 2
 
 
 def test_sensor_create(session: Session, client: TestClient):
@@ -115,7 +174,7 @@ def test_sensor_create(session: Session, client: TestClient):
         json=json_data,
     )
 
-    assert response.status_code == 204
+    assert response.status_code == 201
 
     statement = select(Sensor).where(Sensor.id == 1)
     assert session.exec(statement).one()
