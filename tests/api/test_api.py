@@ -1,9 +1,35 @@
 # pylint: disable=missing-docstring
-
+import csv
 from datetime import datetime
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
-from airtools.models.core import User, Sensor
+from airtools.models.core import User, Sensor, SensorData
+
+
+def _load_sensordata(session: Session, sensor_id: str, limit: int = 5) -> None:
+    sensor_data_path: str = (
+        "tests/test_files/csv/2025-02-07_dht22_sensor_88359.csv"
+    )
+    data: dict[str, str] = []
+    with open(sensor_data_path, newline="", encoding="utf-8") as csvfile:
+        reader = csv.DictReader(
+            csvfile.readlines()[: limit + 1], delimiter=";"
+        )
+        for line in reader:
+            data.append(line)
+
+    sensor = session.exec(select(Sensor).where(Sensor.uid == sensor_id)).one()
+
+    for row in data:
+        sensor_data = SensorData(
+            timestamp=datetime.strptime(row["timestamp"], "%Y-%m-%dT%H:%M:%S"),
+            temperature=row["temperature"],
+            humidity=row["humidity"],
+            sensor_id=sensor.id,
+        )
+        session.add(sensor_data)
+
+    session.commit()
 
 
 def test_list_users(session: Session, client: TestClient):
@@ -90,6 +116,35 @@ def test_user_sensors(session: Session, client: TestClient):
     assert data["first_name"] == "foo"
     assert data["last_check"] == last_mod_date.strftime("%Y-%m-%dT%H:%M:%S")
     assert len(data["sensors"]) == 2
+
+
+def test_sensordata(session: Session, client: TestClient):
+    start = datetime(2025, 2, 7, 0, 5, 0)
+    end = datetime(2025, 2, 7, 0, 12, 0)
+    # number of record to load for testing
+    load_limit: int = 5
+
+    sens = Sensor(
+        uid="11111",
+        name="sens1",
+        lon="1.1111",
+        lat="1.2222",
+        city="Alessandria",
+    )
+    session.add(sens)
+    session.commit()
+    session.refresh(sens)
+
+    _load_sensordata(session, sens.uid, limit=load_limit)
+
+    response = client.get(
+        f"/sensordata/{sens.uid}",
+        params={"start_date": start.isoformat(), "end_date": end.isoformat()},
+    )
+    assert response.status_code == 200
+
+    sensors_outs = response.json()
+    assert len(sensors_outs) == 3
 
 
 def test_user_create(session: Session, client: TestClient):

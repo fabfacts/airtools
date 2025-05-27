@@ -1,5 +1,6 @@
 import logging
-
+from typing import Annotated
+from datetime import datetime
 from contextlib import asynccontextmanager
 from fastapi import HTTPException
 from fastapi import FastAPI, Depends, Query
@@ -7,7 +8,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import create_engine, SQLModel, Session, select
 from sqlalchemy.orm import selectinload
-from airtools.models.core import User, UserOut, Sensor, UserSensors
+from airtools.models.core import User, UserOut, Sensor, UserSensors, SensorData
 
 # from airtools.components.scheduler.core import get_scheduler
 logger = logging.getLogger("uvicorn.error")
@@ -137,11 +138,14 @@ def update_user_sensor(
         sensor_id (str): _description_
     """
     user_obj = session.exec(select(User).where(User.id == user_id)).first()
+    if not user_obj:
+        raise HTTPException(status_code=404, detail="User not found")
+
     sensor_obj = session.exec(
         select(Sensor).where(Sensor.uid == sensor_id)
     ).first()
-    print(sensor_obj.id)
-    # print(user_obj.id)
+
+    # add another sensor to selected user
     user_obj.sensors.append(sensor_obj)
 
     session.add(user_obj)
@@ -162,3 +166,43 @@ def create_sensor(*, session: Session = Depends(get_session), sensor: Sensor):
     session.commit()
     session.refresh(valid)
     return valid
+
+
+@app.get("/sensordata/{sensor_uid}")
+def get_data_by_date(
+    sensor_uid: Annotated[str, "Sensor Uid"],
+    start_date: datetime,
+    end_date: datetime,
+    session: Session = Depends(get_session),
+):
+    """
+    Return a compressed json containing sensor data
+
+    Args:
+        sensor_id (str): _description_
+        start_date (datetime, optional): _description_. Defaults to Query(..., description="Start of date range").
+        end_date (datetime, optional): _description_. Defaults to Query(..., description="End of date range").
+
+    Raises:
+        HTTPException: _description_
+
+    Returns:
+        _type_: _description_
+    """
+    if end_date < start_date:
+        raise HTTPException(
+            status_code=400, detail="End date must be after start date"
+        )
+
+    sensor = session.exec(select(Sensor).where(Sensor.uid == sensor_uid)).one()
+    sensor_data = session.exec(
+        select(SensorData).where(
+            SensorData.sensor_id == sensor.id,
+            SensorData.timestamp >= start_date,
+            SensorData.timestamp <= end_date,
+        )
+    ).all()
+
+    print(sensor_data)
+
+    return sensor_data

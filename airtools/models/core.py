@@ -89,3 +89,22 @@ class Sensor(SQLModel, table=True):
     city: str
     user_id: int | None = Field(foreign_key="user.id")
     user: User = Relationship(back_populates="sensors")
+    # sensor data
+    data: list["SensorData"] | None = Relationship(back_populates="sensor")
+
+
+class SensorData(SQLModel, table=True):
+    """
+    Sensor Data table
+
+    Args:
+        SqlModel (_type_): _description_
+        table (bool, optional): _description_. Defaults to True.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    timestamp: datetime = Field(unique=True)
+    temperature: float
+    humidity: float
+    sensor_id: int = Field(foreign_key="sensor.id")
+    sensor: Sensor = Relationship(back_populates="data")
