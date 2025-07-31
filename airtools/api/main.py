@@ -8,7 +8,13 @@ from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import create_engine, SQLModel, Session, select
 from sqlalchemy.orm import selectinload
-from airtools.models.core import User, UserOut, Sensor, UserSensors, SensorData
+from airtools.models.core import (
+    User,
+    UserOut,
+    Sensor,
+    SensorData,
+    SensorOut,
+)
 
 # from airtools.components.scheduler.core import get_scheduler
 logger = logging.getLogger("uvicorn.error")
@@ -88,7 +94,7 @@ def users_list(
     return users
 
 
-@app.get("/users/{user_id}", response_model=UserSensors)
+@app.get("/sensors/{user_id}", response_model=list[SensorOut])
 def userinfo(user_id: int, session: Session = Depends(get_session)):
     """
     Return user sensors
@@ -100,16 +106,12 @@ def userinfo(user_id: int, session: Session = Depends(get_session)):
     Returns:
         _type_: _description_
     """
-    user = session.exec(
-        select(User)
-        .options(selectinload(User.sensors))
-        .where(User.id == user_id)
-    ).first()
+    sensors = session.exec(select(Sensor).where(user_id == user_id))
 
-    if not user:
+    if not sensors:
         raise HTTPException(status_code=404, detail="User not found")
 
-    return user
+    return sensors
 
 
 @app.post("/users/", status_code=201)
