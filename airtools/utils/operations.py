@@ -1,7 +1,8 @@
 import logging
 from io import TextIOBase
-from typing import Tuple, Mapping, Any
+from typing import Dict, List, Any
 from enum import Enum
+
 import pandas as pd
 import requests
 
@@ -13,60 +14,58 @@ logger = logging.getLogger(__name__)
 
 class SensorType(Enum):
     """
-    Enumerate sensors
+    Enumerate sensor types used by the project.
     """
 
-    SDS011 = (0,)
+    SDS011 = 0
     DHT22 = 1
 
 
 def download(unitid: int, sensor_type: SensorType, date: str, url: Url) -> str:
     """
-    Download one sensor file from the archive located in url. File name format is
-
-    `2025-01-20_bme280_sensor_113.csv`
+    Download one sensor file from an archive URL.
 
     Args:
-        unitid (int): _description_
-        sensor_type (str): _description_
+        unitid: Sensor numeric id.
+        sensor_type: SensorType enum value.
+        date: Date string used in the filename (e.g. "2025-01-20").
+        url: Base Url to download from.
 
     Returns:
-        bool: _description_
-    """
-    abs_url: Url = f"{url}/{date}_{sensor_type}_{unitid}.csv"
+        The response body as text.
 
-    res = requests.get(abs_url, timeout=60)
+    Raises:
+        DownloadError: If the HTTP request failed.
+    """
+    abs_url: Url = Url(f"{url}/{date}_{sensor_type}_{unitid}.csv")
+
+    res: requests.Response = requests.get(abs_url, timeout=60)
 
     if res.status_code != 200:
-        logger.error("Download failed for %s", abs_url)
-        raise DownloadError
+        logger.error(
+            "Download failed for %s (status %s)", abs_url, res.status_code
+        )
+        raise DownloadError(f"Failed to download {abs_url}: {res.status_code}")
 
-    return res.data
+    return res.text
 
 
-def parse_data(
-    data: TextIOBase, sensor_type: SensorType
-) -> Tuple[str, str, str]:
+def parse_data(data: TextIOBase, sensor_type: SensorType) -> Dict[str, Any]:
     """
-    Parse a csv file, squize data and calculate the average, min and max
+    Parse a CSV file-like object and compute summary statistics.
 
-    Common to all sensors fields are: sensor_id,sensor_type,location,lat,lon,timestamp
-
-    Our sensors types are `SDS011` for air particles set fields:
-
-    P1,P2
-
-    and `DHT22` for temp/humidity that sets fields:
-
-    temperature,humidity
+    The function extracts common fields and sensor-specific fields, then computes
+    average, min and max for sensor measurement fields.
 
     Args:
-        data (TextIOBase): Text file Object
+        data: A text file-like object (opened CSV).
+        sensor_type: Type of sensor (controls which sensor columns are expected).
 
     Returns:
-        Tuple[str,str,str]: Tuple containing the average, min and max value
+        A dictionary containing default fields plus computed statistics.
     """
-    default_fields: list = [
+    # default columns present in every sensor CSV
+    default_fields: List[str] = [
         "sensor_id",
         "sensor_type",
         "location",
@@ -74,12 +73,15 @@ def parse_data(
         "lon",
         "timestamp",
     ]
-    field_names = default_fields.copy()
-    sensor_field_names: list[str] = []
-    average_out: Mapping[str, Any] = dict.fromkeys(default_fields)
+
+    field_names: List[str] = default_fields.copy()
+    sensor_field_names: List[str] = []
+
+    # result dictionary (mutable)
+    average_out: Dict[str, Any] = {k: None for k in default_fields}
     csv_separator: str = ","
 
-    logger.info("Sensor %s", sensor_type)
+    logger.info("Parsing sensor data for type %s", sensor_type)
     if sensor_type == SensorType.DHT22:
         sensor_field_names = ["temperature", "humidity"]
         field_names += sensor_field_names
@@ -88,41 +90,57 @@ def parse_data(
         sensor_field_names = ["P1", "P2"]
         field_names += sensor_field_names
 
-    # read fieldnames
-    reader = pd.read_csv(data, usecols=field_names, sep=csv_separator)
-    logger.debug("imported csv, columns %s", reader.columns)
+    # read csv into a DataFrame
+    reader: pd.DataFrame = pd.read_csv(
+        data, usecols=field_names, sep=csv_separator
+    )
+    logger.debug("Imported csv, columns %s", list(reader.columns))
 
-    sensor_field_avg: float = 0.0
-    sensor_field_avg_count: int = 0
-    sensor_field_max: float = 0.0
-    sensor_field_min: float = 0.0
+    # get default values from first row (if present)
+    default_row: List[Dict[str, Any]] = (
+        reader.head(1)[default_fields].to_dict(orient="records")
+        if not reader.empty
+        else []
+    )
 
-    # get default values from first row
-    default_row = reader.head(1)[default_fields].to_dict(orient="records")
-
-    # calculate average, max, min
+    # calculate average, max, min per sensor field
     for field in sensor_field_names:
+        # ensure we reset per-field accumulators
+        sensor_field_avg: float = 0.0
+        sensor_field_count: int = 0
+        sensor_field_max: float | None = None
+        sensor_field_min: float | None = None
+
         for _, row in reader.iterrows():
-            sensor_field_avg += row[field]
-            sensor_field_max = (
-                sensor_field_max
-                if row[field] < sensor_field_max
-                else row[field]
-            )
-            sensor_field_min = (
-                sensor_field_min
-                if row[field] > sensor_field_min
-                else row[field]
-            )
-            sensor_field_avg_count += 1
+            # row is a pandas Series
+            value = row[field]
+            try:
+                numeric = float(value)
+            except (TypeError, ValueError):
+                # skip non-numeric entries
+                continue
 
-        average_out[field] = round(
-            sensor_field_avg / sensor_field_avg_count, 1
-        )
-        average_out[f"{field}_max"] = sensor_field_max
-        average_out[f"{field}_min"] = sensor_field_min
+            sensor_field_avg += numeric
+            sensor_field_count += 1
 
-    # merge into final dictionary
-    average_out.update(default_row[0])
+            if sensor_field_max is None or numeric > sensor_field_max:
+                sensor_field_max = numeric
+            if sensor_field_min is None or numeric < sensor_field_min:
+                sensor_field_min = numeric
+
+        if sensor_field_count > 0:
+            average_out[field] = round(
+                sensor_field_avg / sensor_field_count, 1
+            )
+            average_out[f"{field}_max"] = sensor_field_max
+            average_out[f"{field}_min"] = sensor_field_min
+        else:
+            average_out[field] = None
+            average_out[f"{field}_max"] = None
+            average_out[f"{field}_min"] = None
+
+    # merge default row values (if available)
+    if default_row:
+        average_out.update(default_row[0])
 
     return average_out

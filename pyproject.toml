@@ -68,6 +68,11 @@ extra-dependencies = [
   "alembic",   # sqlalchemy migrations
 ]
 
+[tool.mypy]
+exclude = [
+    "tests/"
+]
+
 [tool.hatch.envs.test.scripts]
 types = "mypy --install-types --non-interactive {args:src/airtools tests}"
 unit = 'pytest --cov-report xml:coverage.xml --cov="airtools" -m "slow" {args:test}'

@@ -1,14 +1,17 @@
 from csv import DictReader
 from datetime import datetime
+from typing import List, Dict
 from sqlmodel import Session, SQLModel
 from sqlmodel import create_engine, select
 
 from airtools.models.core import User, Sensor, SensorData
 
-FILE_NAME = "database.db"
-SENSOR_ID = "88359"
-SENSOR_DATA_PATH = "tests/test_files/csv/2025-02-07_dht22_sensor_88359.csv"
-DATABASE_URL = f"sqlite:///{FILE_NAME}"
+FILE_NAME: str = "database.db"
+SENSOR_ID: str = "88359"
+SENSOR_DATA_PATH: str = (
+    "tests/test_files/csv/2025-02-07_dht22_sensor_88359.csv"
+)
+DATABASE_URL: str = f"sqlite:///{FILE_NAME}"
 
 engine = create_engine(DATABASE_URL, echo=True)
 
@@ -16,17 +19,18 @@ engine = create_engine(DATABASE_URL, echo=True)
 SQLModel.metadata.create_all(engine)
 
 
-def load_sensor_data() -> DictReader:
+def load_sensor_data() -> List[Dict[str, str]]:
     """
-    Read example data
+    Read example data and return as list of dicts.
 
     Returns:
-        _type_: _description_
+        List[Dict[str, str]]: List of CSV rows as dictionaries.
     """
-    data: dict[str, str] = []
+    data: List[Dict[str, str]] = []
     with open(SENSOR_DATA_PATH, newline="", encoding="utf-8") as csvfile:
-        reader = DictReader(csvfile, delimiter=";")
-        # print(reader)
+        # Use DictReader to read CSV file into a list of dictionaries
+        # note: I don't know why typing accepted by mypy is not DictReader[str, str]
+        reader: DictReader[str] = DictReader(csvfile, delimiter=";")
         for line in reader:
             data.append(line)
 
@@ -84,6 +88,7 @@ with Session(engine) as session:
     session.refresh(testuser)
 
     for row in load_sensor_data():
+        # row is Dict[str, str]
         sensor = session.exec(
             select(Sensor).where(Sensor.uid == row["sensor_id"])
         ).one()

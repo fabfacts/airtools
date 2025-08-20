@@ -4,9 +4,8 @@ from datetime import date
 from airtools.models.core import User
 
 
-def test_create_user():
-
-    User(
+def test_create_user() -> None:
+    user: User = User(
         first_name="foo",
         last_name="bar",
         username="foobar",
@@ -17,3 +16,4 @@ def test_create_user():
         city="Alessandria",
         last_check=date.today(),
     )
+    assert user is not None

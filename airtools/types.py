@@ -1,5 +1,5 @@
 import pathlib
-from typing import TypeVar
+from typing import TypeVar, Any
 
 PathLike = TypeVar("PathLike", str, pathlib.Path, None)
 
@@ -9,9 +9,9 @@ class Url(str):
     Type URL, checks http/https present at the beginning of a string
     """
 
-    def __new__(cls, *value):
+    def __new__(cls: type["Url"], *value: Any) -> "Url":
         if value:
-            v0 = value[0]
+            v0: Any = value[0]
             if not isinstance(v0, str):
                 raise TypeError(f'Unexpected type for URL: "{type(v0)}"')
             if not (v0.startswith("http://") or v0.startswith("https://")):

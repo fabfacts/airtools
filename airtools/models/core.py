@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 from pydantic import BaseModel
 from sqlmodel import Field, SQLModel, Relationship
@@ -6,10 +6,14 @@ from sqlmodel import Field, SQLModel, Relationship
 
 class SensorOut(BaseModel):
     """
-    Custom Sensor API output
+    Output model for Sensor API responses.
 
-    Args:
-        BaseModel (_type_): _description_
+    Attributes:
+        uid (str): Unique identifier for the sensor.
+        name (str): Name of the sensor.
+        lon (str): Longitude of the sensor location.
+        lat (str): Latitude of the sensor location.
+        city (str): City where the sensor is located.
     """
 
     uid: str
@@ -20,15 +24,27 @@ class SensorOut(BaseModel):
 
 
 class SensorUpdate(BaseModel):
+    """
+    Model for updating a sensor.
+
+    Attributes:
+        uid (str): Unique identifier for the sensor.
+    """
+
     uid: str
 
 
 class UserOut(BaseModel):
     """
-    Custom User API Output
+    Output model for User API responses.
 
-    Args:
-        BaseModel (_type_): _description_
+    Attributes:
+        id (int): User ID.
+        first_name (str): User's first name.
+        last_name (str): User's last name.
+        username (str): User's username.
+        age (Optional[int]): User's age.
+        last_check (Optional[datetime]): Last check timestamp.
     """
 
     id: int
@@ -41,22 +57,27 @@ class UserOut(BaseModel):
 
 class UserSensors(UserOut):
     """
-    Custom User API Output with sensors
+    Output model for User API responses including sensors.
 
-    Args:
-        BaseModel (_type_): _description_
+    Attributes:
+        sensors (List[SensorOut]): List of sensors associated with the user.
     """
 
-    sensors: list[SensorOut]
+    sensors: List[SensorOut]
 
 
-class User(SQLModel, table=True):
+class User(SQLModel, table=True):  # type: ignore
     """
-    User table
+    Database model for users.
 
-    Args:
-        SQLModel (_type_): _description_
-        table (bool, optional): _description_. Defaults to True.
+    Attributes:
+        id (Optional[int]): User ID, primary key.
+        first_name (str): User's first name.
+        last_name (str): User's last name.
+        username (str): User's username.
+        age (Optional[int]): User's age.
+        last_check (Optional[datetime]): Last check timestamp.
+        sensors (List["Sensor"] | None): List of sensors associated with the user.
     """
 
     id: int | None = Field(default=None, primary_key=True)
@@ -72,13 +93,19 @@ class User(SQLModel, table=True):
     sensors: list["Sensor"] | None = Relationship(back_populates="user")
 
 
-class Sensor(SQLModel, table=True):
+class Sensor(SQLModel, table=True):  # type: ignore
     """
-    User table
+    Database model for sensors.
 
-    Args:
-        SQLModel (_type_): _description_
-        table (bool, optional): _description_. Defaults to True.
+    Attributes:
+        id (Optional[int]): Sensor ID, primary key.
+        uid (str): Unique identifier for the sensor.
+        name (str): Name of the sensor.
+        lon (str): Longitude of the sensor location.
+        lat (str): Latitude of the sensor location.
+        city (str): City where the sensor is located.
+        user_id (Optional[int]): User ID, foreign key to the User table.
+        data (List["SensorData"] | None): List of sensor data associated with the sensor.
     """
 
     id: int | None = Field(default=None, primary_key=True)
@@ -93,7 +120,7 @@ class Sensor(SQLModel, table=True):
     data: list["SensorData"] | None = Relationship(back_populates="sensor")
 
 
-class SensorData(SQLModel, table=True):
+class SensorData(SQLModel, table=True):  # type: ignore
     """
     Sensor Data table
 
