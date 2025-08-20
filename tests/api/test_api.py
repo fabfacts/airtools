@@ -107,15 +107,17 @@ def test_user_sensors(session: Session, client: TestClient):
     session.commit()
     session.refresh(testuser)
 
-    response = client.get(f"/users/{testuser.id}")
+    response = client.get(f"/sensors/{testuser.id}")
 
     assert response.status_code == 200
 
     data = response.json()
 
-    assert data["first_name"] == "foo"
-    assert data["last_check"] == last_mod_date.strftime("%Y-%m-%dT%H:%M:%S")
-    assert len(data["sensors"]) == 2
+    print(data)
+
+    assert len(data) == 2
+    assert data[0]["uid"] == "11111"
+    assert data[1]["uid"] == "22222"
 
 
 def test_sensordata(session: Session, client: TestClient):
@@ -137,6 +139,9 @@ def test_sensordata(session: Session, client: TestClient):
 
     _load_sensordata(session, sens.uid, limit=load_limit)
 
+    print(start.isoformat())
+    print(end.isoformat())
+
     response = client.get(
         f"/sensordata/{sens.uid}",
         params={"start_date": start.isoformat(), "end_date": end.isoformat()},
@@ -144,6 +149,9 @@ def test_sensordata(session: Session, client: TestClient):
     assert response.status_code == 200
 
     sensors_outs = response.json()
+
+    print(len(sensors_outs))
+
     assert len(sensors_outs) == 3
 
 

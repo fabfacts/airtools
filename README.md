@@ -1,5 +1,7 @@
 # Developers
 
+Sensors Data can be downloaded in CSV format from https://archive.sensor.community/
+
 Start environment
 
     $ hatch shell
@@ -27,3 +29,13 @@ OPTIONAL mark migration without transaction
 Apply migration
 
     $  alembic upgrade head
+
+Testing with curl
+
+    $ curl -X GET http://localhost:8000/sensordata/<sensor_uid>?start_date=2025-02-07T00:05:00&end_date=2025-02-07T00:12:00
+
+## Data
+
+To load custom data in the database you can use this script
+
+    $ python load_test_data.py

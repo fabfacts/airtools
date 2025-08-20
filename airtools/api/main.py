@@ -1,201 +1,181 @@
 import logging
-from typing import Annotated
+from typing import Annotated, Any
 from datetime import datetime
 from contextlib import asynccontextmanager
-from fastapi import HTTPException
-from fastapi import FastAPI, Depends, Query
+from fastapi import HTTPException, FastAPI, Depends
 from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import create_engine, SQLModel, Session, select
 from sqlalchemy.orm import selectinload
-from airtools.models.core import User, UserOut, Sensor, UserSensors, SensorData
+from airtools.models.core import (
+    User,
+    UserOut,
+    Sensor,
+    SensorData,
+    SensorOut,
+)
 
-# from airtools.components.scheduler.core import get_scheduler
 logger = logging.getLogger("uvicorn.error")
 
-sqlite_file_name = "database.db"
-sqlite_url = f"sqlite:///{sqlite_file_name}"
+sqlite_file_name: str = "database.db"
+sqlite_url: str = f"sqlite:///{sqlite_file_name}"
 
-connect_args = {"check_same_thread": False}
+connect_args: dict[str, Any] = {"check_same_thread": False}
 engine = create_engine(sqlite_url, echo=True, connect_args=connect_args)
 
 
-def create_db_and_tables():
+def create_db_and_tables() -> None:
     """
-    Generates database tables
+    Create database tables from SQLModel models.
+    Called at application startup (lifespan).
     """
     SQLModel.metadata.create_all(engine)
 
 
-def get_session():
+def get_session() -> Session:
     """
-    for tests and production that need a different database
+    Provide a SQLModel Session for request handlers.
 
-    Yields:
-        _type_: _description_
+    Note: used with FastAPI Depends. This generator yields a session and closes it.
     """
     with Session(engine) as session:
         yield session
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI):  # type: ignore
     """
-    Used to run code before and after requests being consumed
-
-    Args:
-        app (FastAPI): _description_
+    FastAPI lifespan context: run startup/shutdown code here.
     """
     create_db_and_tables()
-    # start scheduler
-    # scheduler = get_scheduler()
-    # scheduler.start()
     yield
     logger.info("app shutdown")
-    # close the scheduler on exit
-    # scheduler.shutdown()
 
 
-# start FastAPI
 app = FastAPI(lifespan=lifespan)
+# Add basic CORS middleware. For production restrict origins explicitly.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "*"
-    ],  # Replace "*" with specific origins for security, e.g. ["http://localhost:3000"]
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
-@app.get("/", include_in_schema=False)
-def root():
+@app.get("/", include_in_schema=False)  # type: ignore
+def root() -> RedirectResponse:
+    """Redirect root requests to the interactive docs page."""
     return RedirectResponse(url="/docs")
 
 
-@app.get("/users/", response_model=list[UserOut])
+@app.get("/users/", response_model=list[UserOut])  # type: ignore
 def users_list(
     *,
     session: Session = Depends(get_session),
-    offset: int = 0,
-    limit: int = Query(default=100, le=100),
-):
-    users = session.exec(
+) -> list[UserOut]:
+    """Return list of users with their sensors loaded."""
+    users: list[UserOut] = session.exec(
         select(User).options(selectinload(User.sensors))
     ).all()
-
     return users
 
 
-@app.get("/users/{user_id}", response_model=UserSensors)
-def userinfo(user_id: int, session: Session = Depends(get_session)):
+@app.get("/sensors/{user_id}", response_model=list[SensorOut])  # type: ignore
+def userinfo(
+    user_id: int, session: Session = Depends(get_session)
+) -> list[SensorOut]:
     """
-    Return user sensors
+    Return sensors for a given user id.
 
-    Args:
-        user_id (int): _description_
-        session (Session, optional): _description_. Defaults to Depends(get_session).
-
-    Returns:
-        _type_: _description_
+    Raises HTTPException(404) if no sensors/user found.
     """
-    user = session.exec(
-        select(User)
-        .options(selectinload(User.sensors))
-        .where(User.id == user_id)
-    ).first()
-
-    if not user:
+    sensors: list[SensorOut] = session.exec(
+        select(Sensor).where(user_id == user_id)
+    )
+    if not sensors:
         raise HTTPException(status_code=404, detail="User not found")
+    return sensors
 
-    return user
 
-
-@app.post("/users/", status_code=201)
-def create_user(*, session: Session = Depends(get_session), user: User):
+@app.post("/users/", status_code=201)  # type: ignore
+def create_user(
+    *, session: Session = Depends(get_session), user: User
+) -> User:
     """
-    Create user
+    Create a new user record.
 
-    Args:
-        user (User): User Model
+    Validation is performed via SQLModel / Pydantic model_validate.
     """
-    valid_user = User.model_validate(user)
+    valid_user: User = User.model_validate(user)
     session.add(valid_user)
     session.commit()
     session.refresh(valid_user)
     return user
 
 
-@app.put("/addsensor/{user_id}/{sensor_id}", status_code=204)
+@app.put("/addsensor/{user_id}/{sensor_id}", status_code=204)  # type: ignore
 def update_user_sensor(
     user_id: int, sensor_id: str, session: Session = Depends(get_session)
 ) -> None:
-    """add existing sensor to existing user
-
-    Args:
-        user_id (int): _description_
-        sensor_id (str): _description_
     """
-    user_obj = session.exec(select(User).where(User.id == user_id)).first()
+    Associate an existing sensor with an existing user.
+
+    Raises 404 if the user is not found.
+    """
+    user_obj: User = session.exec(
+        select(User).where(User.id == user_id)
+    ).first()
     if not user_obj:
         raise HTTPException(status_code=404, detail="User not found")
 
-    sensor_obj = session.exec(
+    sensor_obj: Sensor = session.exec(
         select(Sensor).where(Sensor.uid == sensor_id)
     ).first()
 
-    # add another sensor to selected user
-    user_obj.sensors.append(sensor_obj)
-
+    # Append relationship and persist
+    user_obj.sensors.append(sensor_obj)  # type: ignore
     session.add(user_obj)
     session.commit()
 
 
-@app.post("/sensors/", status_code=201)
-def create_sensor(*, session: Session = Depends(get_session), sensor: Sensor):
+@app.post("/sensors/", status_code=201)  # type: ignore
+def create_sensor(
+    *, session: Session = Depends(get_session), sensor: Sensor
+) -> Sensor:
     """
-    Create Sensor
+    Create a sensor record.
 
-    Args:
-        user (Sensor): _description_
-        session (Session, optional): _description_. Defaults to Depends(get_session).
+    Returns the created Sensor instance.
     """
-    valid = Sensor.model_validate(sensor)
+    valid: Sensor = Sensor.model_validate(sensor)
     session.add(valid)
     session.commit()
     session.refresh(valid)
     return valid
 
 
-@app.get("/sensordata/{sensor_uid}")
+@app.get("/sensordata/{sensor_uid}")  # type: ignore
 def get_data_by_date(
     sensor_uid: Annotated[str, "Sensor Uid"],
     start_date: datetime,
     end_date: datetime,
     session: Session = Depends(get_session),
-):
+) -> list[SensorData]:
     """
-    Return a compressed json containing sensor data
+    Return sensor data between start_date and end_date inclusive.
 
-    Args:
-        sensor_id (str): _description_
-        start_date (datetime, optional): _description_. Defaults to Query(..., description="Start of date range").
-        end_date (datetime, optional): _description_. Defaults to Query(..., description="End of date range").
-
-    Raises:
-        HTTPException: _description_
-
-    Returns:
-        _type_: _description_
+    Validates that end_date is after start_date and returns 400 otherwise.
     """
     if end_date < start_date:
         raise HTTPException(
             status_code=400, detail="End date must be after start date"
         )
 
-    sensor = session.exec(select(Sensor).where(Sensor.uid == sensor_uid)).one()
-    sensor_data = session.exec(
+    sensor: Sensor = session.exec(
+        select(Sensor).where(Sensor.uid == sensor_uid)
+    ).one()
+    sensor_data: list[SensorData] = session.exec(
         select(SensorData).where(
             SensorData.sensor_id == sensor.id,
             SensorData.timestamp >= start_date,
@@ -203,6 +183,7 @@ def get_data_by_date(
         )
     ).all()
 
+    # Logging/printing for debug during tests
     print(sensor_data)
 
     return sensor_data
