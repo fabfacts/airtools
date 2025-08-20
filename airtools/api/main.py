@@ -26,17 +26,17 @@ engine = create_engine(sqlite_url, echo=True, connect_args=connect_args)
 
 def create_db_and_tables() -> None:
     """
-    Generates database tables
+    Create database tables from SQLModel models.
+    Called at application startup (lifespan).
     """
     SQLModel.metadata.create_all(engine)
 
 
 def get_session() -> Session:
     """
-    for tests and production that need a different database
+    Provide a SQLModel Session for request handlers.
 
-    Yields:
-        Session: SQLModel session
+    Note: used with FastAPI Depends. This generator yields a session and closes it.
     """
     with Session(engine) as session:
         yield session
@@ -45,10 +45,7 @@ def get_session() -> Session:
 @asynccontextmanager
 async def lifespan(app: FastAPI):  # type: ignore
     """
-    Used to run code before and after requests being consumed
-
-    Args:
-        app (FastAPI): FastAPI application
+    FastAPI lifespan context: run startup/shutdown code here.
     """
     create_db_and_tables()
     yield
@@ -56,11 +53,10 @@ async def lifespan(app: FastAPI):  # type: ignore
 
 
 app = FastAPI(lifespan=lifespan)
+# Add basic CORS middleware. For production restrict origins explicitly.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "*"
-    ],  # Replace "*" with specific origins for security, e.g. ["http://localhost:3000"]
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -69,6 +65,7 @@ app.add_middleware(
 
 @app.get("/", include_in_schema=False)  # type: ignore
 def root() -> RedirectResponse:
+    """Redirect root requests to the interactive docs page."""
     return RedirectResponse(url="/docs")
 
 
@@ -76,9 +73,8 @@ def root() -> RedirectResponse:
 def users_list(
     *,
     session: Session = Depends(get_session),
-    # offset: int = 0,
-    # limit: int = Query(default=100, le=100),
 ) -> list[UserOut]:
+    """Return list of users with their sensors loaded."""
     users: list[UserOut] = session.exec(
         select(User).options(selectinload(User.sensors))
     ).all()
@@ -90,14 +86,9 @@ def userinfo(
     user_id: int, session: Session = Depends(get_session)
 ) -> list[SensorOut]:
     """
-    Return user sensors
+    Return sensors for a given user id.
 
-    Args:
-        user_id (int): User ID
-        session (Session, optional): SQLModel session
-
-    Returns:
-        list[SensorOut]: List of sensors
+    Raises HTTPException(404) if no sensors/user found.
     """
     sensors: list[SensorOut] = session.exec(
         select(Sensor).where(user_id == user_id)
@@ -112,10 +103,9 @@ def create_user(
     *, session: Session = Depends(get_session), user: User
 ) -> User:
     """
-    Create user
+    Create a new user record.
 
-    Args:
-        user (User): User Model
+    Validation is performed via SQLModel / Pydantic model_validate.
     """
     valid_user: User = User.model_validate(user)
     session.add(valid_user)
@@ -128,11 +118,10 @@ def create_user(
 def update_user_sensor(
     user_id: int, sensor_id: str, session: Session = Depends(get_session)
 ) -> None:
-    """add existing sensor to existing user
+    """
+    Associate an existing sensor with an existing user.
 
-    Args:
-        user_id (int): User ID
-        sensor_id (str): Sensor ID
+    Raises 404 if the user is not found.
     """
     user_obj: User = session.exec(
         select(User).where(User.id == user_id)
@@ -144,6 +133,7 @@ def update_user_sensor(
         select(Sensor).where(Sensor.uid == sensor_id)
     ).first()
 
+    # Append relationship and persist
     user_obj.sensors.append(sensor_obj)  # type: ignore
     session.add(user_obj)
     session.commit()
@@ -154,11 +144,9 @@ def create_sensor(
     *, session: Session = Depends(get_session), sensor: Sensor
 ) -> Sensor:
     """
-    Create Sensor
+    Create a sensor record.
 
-    Args:
-        sensor (Sensor): Sensor Model
-        session (Session, optional): SQLModel session
+    Returns the created Sensor instance.
     """
     valid: Sensor = Sensor.model_validate(sensor)
     session.add(valid)
@@ -175,18 +163,9 @@ def get_data_by_date(
     session: Session = Depends(get_session),
 ) -> list[SensorData]:
     """
-    Return a compressed json containing sensor data
+    Return sensor data between start_date and end_date inclusive.
 
-    Args:
-        sensor_uid (str): Sensor UID
-        start_date (datetime): Start of date range
-        end_date (datetime): End of date range
-
-    Raises:
-        HTTPException: If end_date < start_date
-
-    Returns:
-        list[SensorData]: List of sensor data
+    Validates that end_date is after start_date and returns 400 otherwise.
     """
     if end_date < start_date:
         raise HTTPException(
@@ -204,6 +183,7 @@ def get_data_by_date(
         )
     ).all()
 
+    # Logging/printing for debug during tests
     print(sensor_data)
 
     return sensor_data

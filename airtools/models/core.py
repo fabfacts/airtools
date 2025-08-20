@@ -6,14 +6,8 @@ from sqlmodel import Field, SQLModel, Relationship
 
 class SensorOut(BaseModel):
     """
-    Output model for Sensor API responses.
-
-    Attributes:
-        uid (str): Unique identifier for the sensor.
-        name (str): Name of the sensor.
-        lon (str): Longitude of the sensor location.
-        lat (str): Latitude of the sensor location.
-        city (str): City where the sensor is located.
+    Output model for sensor API responses.
+    Only public sensor attributes are returned to API clients.
     """
 
     uid: str
@@ -24,27 +18,15 @@ class SensorOut(BaseModel):
 
 
 class SensorUpdate(BaseModel):
-    """
-    Model for updating a sensor.
-
-    Attributes:
-        uid (str): Unique identifier for the sensor.
-    """
+    """Schema used to update sensor fields (currently only uid)."""
 
     uid: str
 
 
 class UserOut(BaseModel):
     """
-    Output model for User API responses.
-
-    Attributes:
-        id (int): User ID.
-        first_name (str): User's first name.
-        last_name (str): User's last name.
-        username (str): User's username.
-        age (Optional[int]): User's age.
-        last_check (Optional[datetime]): Last check timestamp.
+    Output model for user API responses.
+    Contains a subset of User DB model fields returned by the API.
     """
 
     id: int
@@ -56,40 +38,32 @@ class UserOut(BaseModel):
 
 
 class UserSensors(UserOut):
-    """
-    Output model for User API responses including sensors.
-
-    Attributes:
-        sensors (List[SensorOut]): List of sensors associated with the user.
-    """
+    """User output model extended with a list of sensors."""
 
     sensors: List[SensorOut]
 
 
 class User(SQLModel, table=True):  # type: ignore
     """
-    Database model for users.
+    Database model representing application users.
 
-    Attributes:
-        id (Optional[int]): User ID, primary key.
-        first_name (str): User's first name.
-        last_name (str): User's last name.
-        username (str): User's username.
-        age (Optional[int]): User's age.
-        last_check (Optional[datetime]): Last check timestamp.
-        sensors (List["Sensor"] | None): List of sensors associated with the user.
+    Notes:
+      - `table=True` marks this class as a DB table for SQLModel.
+      - `id` is the primary key.
+      - `sensors` is a relationship populated via SQLModel/SQLAlchemy.
     """
 
     id: int | None = Field(default=None, primary_key=True)
     first_name: str
     last_name: str
     username: str
-    # password: str
-    # sensor_id: int | None = Field(default=None, foreign_key="sensor.id")
+    # password omitted from public models; stored in DB for auth
     age: Optional[int] = None
+    # store last_check timestamp; default provided by Field factory
     last_check: Optional[datetime] = Field(
         default_factory=datetime.now, nullable=False
     )
+    # relationship to Sensor objects (many-to-many or one-to-many depending on schema)
     sensors: list["Sensor"] | None = Relationship(back_populates="user")
 
 
@@ -97,15 +71,10 @@ class Sensor(SQLModel, table=True):  # type: ignore
     """
     Database model for sensors.
 
-    Attributes:
-        id (Optional[int]): Sensor ID, primary key.
-        uid (str): Unique identifier for the sensor.
-        name (str): Name of the sensor.
-        lon (str): Longitude of the sensor location.
-        lat (str): Latitude of the sensor location.
-        city (str): City where the sensor is located.
-        user_id (Optional[int]): User ID, foreign key to the User table.
-        data (List["SensorData"] | None): List of sensor data associated with the sensor.
+    Notes:
+      - `uid` is a unique sensor identifier (provided by hardware).
+      - `user_id` links a sensor to an owning user (if you use one-to-many).
+      - `data` relationship links time-series SensorData rows.
     """
 
     id: int | None = Field(default=None, primary_key=True)
@@ -116,17 +85,18 @@ class Sensor(SQLModel, table=True):  # type: ignore
     city: str
     user_id: int | None = Field(foreign_key="user.id")
     user: User = Relationship(back_populates="sensors")
-    # sensor data
+    # time-series measurements for this sensor
     data: list["SensorData"] | None = Relationship(back_populates="sensor")
 
 
 class SensorData(SQLModel, table=True):  # type: ignore
     """
-    Sensor Data table
+    Table storing time-series measurements for sensors.
 
-    Args:
-        SqlModel (_type_): _description_
-        table (bool, optional): _description_. Defaults to True.
+    Fields:
+      - timestamp: measurement datetime (unique per dataset here)
+      - temperature/humidity/P1/P2: optional numeric fields depending on sensor type
+      - sensor_id: foreign key to Sensor table
     """
 
     id: int | None = Field(default=None, primary_key=True)
@@ -134,4 +104,5 @@ class SensorData(SQLModel, table=True):  # type: ignore
     temperature: float
     humidity: float
     sensor_id: int = Field(foreign_key="sensor.id")
+    # back-reference to parent Sensor
     sensor: Sensor = Relationship(back_populates="data")
