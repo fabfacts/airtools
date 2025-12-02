@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import Annotated, Any
 from datetime import datetime
 from contextlib import asynccontextmanager
@@ -7,12 +8,17 @@ from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import create_engine, SQLModel, Session, select
 from sqlalchemy.orm import selectinload
+from sqlalchemy.exc import IntegrityError
 from airtools.models.core import (
     User,
     UserOut,
     Sensor,
     SensorData,
     SensorOut,
+)
+from airtools.components.scheduler.core import (
+    start_scheduler,
+    stop_scheduler,
 )
 
 logger = logging.getLogger("uvicorn.error")
@@ -21,7 +27,8 @@ sqlite_file_name: str = "database.db"
 sqlite_url: str = f"sqlite:///{sqlite_file_name}"
 
 connect_args: dict[str, Any] = {"check_same_thread": False}
-engine = create_engine(sqlite_url, echo=True, connect_args=connect_args)
+DEBUG = os.getenv("DEBUG", "false").lower() == "true"
+engine = create_engine(sqlite_url, echo=DEBUG, connect_args=connect_args)
 
 
 def create_db_and_tables() -> None:
@@ -46,19 +53,53 @@ def get_session() -> Session:
 async def lifespan(app: FastAPI):  # type: ignore
     """
     FastAPI lifespan context: run startup/shutdown code here.
+    Manages database initialization and background scheduler.
     """
+    # === STARTUP ===
+    logger.info("Starting application...")
     create_db_and_tables()
+
+    # Start the scheduler
+    start_scheduler()
+
+    # Schedule sensor data collection jobs
+    # Example: Collect data from sensor 88359 every hour
+    # Uncomment and configure as needed
+    # add_scheduled_job(
+    #     FetchData.collect_sensor_data,
+    #     trigger='interval',
+    #     hours=1,
+    #     kwargs={
+    #         'sensor_uid': '88359',
+    #         'sensor_type': 'dht22'
+    #     },
+    #     id='collect_sensor_88359',
+    #     replace_existing=True
+    # )
+
+    logger.info("Application startup complete")
+
+    # === APPLICATION RUNNING ===
     yield
-    logger.info("app shutdown")
+
+    # === SHUTDOWN ===
+    logger.info("Shutting down application...")
+    stop_scheduler()
+    logger.info("Application shutdown complete")
 
 
 app = FastAPI(lifespan=lifespan)
-# Add basic CORS middleware. For production restrict origins explicitly.
+
+# Configure CORS - restrict origins for production
+ALLOWED_ORIGINS = os.getenv(
+    "CORS_ORIGINS", "http://localhost:3000,http://localhost:8080"
+).split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -91,8 +132,8 @@ def userinfo(
     Raises HTTPException(404) if no sensors/user found.
     """
     sensors: list[SensorOut] = session.exec(
-        select(Sensor).where(user_id == user_id)
-    )
+        select(Sensor).where(Sensor.user_id == user_id)
+    ).all()
     if not sensors:
         raise HTTPException(status_code=404, detail="User not found")
     return sensors
@@ -109,9 +150,17 @@ def create_user(
     """
     valid_user: User = User.model_validate(user)
     session.add(valid_user)
-    session.commit()
-    session.refresh(valid_user)
-    return user
+    try:
+        session.commit()
+        session.refresh(valid_user)
+    except IntegrityError as e:
+        session.rollback()
+        logger.error("Database integrity error: %s", str(e))
+        raise HTTPException(
+            status_code=409,
+            detail="Resource already exists or constraint violation",
+        ) from e
+    return valid_user
 
 
 @app.put("/addsensor/{user_id}/{sensor_id}", status_code=204)  # type: ignore
@@ -129,14 +178,27 @@ def update_user_sensor(
     if not user_obj:
         raise HTTPException(status_code=404, detail="User not found")
 
-    sensor_obj: Sensor = session.exec(
+    sensor_obj: Sensor | None = session.exec(
         select(Sensor).where(Sensor.uid == sensor_id)
     ).first()
+
+    if not sensor_obj:
+        raise HTTPException(
+            status_code=404, detail=f"Sensor with uid '{sensor_id}' not found"
+        )
 
     # Append relationship and persist
     user_obj.sensors.append(sensor_obj)  # type: ignore
     session.add(user_obj)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError as e:
+        session.rollback()
+        logger.error("Database integrity error: %s", str(e))
+        raise HTTPException(
+            status_code=409,
+            detail="Resource already exists or constraint violation",
+        ) from e
 
 
 @app.post("/sensors/", status_code=201)  # type: ignore
@@ -150,8 +212,16 @@ def create_sensor(
     """
     valid: Sensor = Sensor.model_validate(sensor)
     session.add(valid)
-    session.commit()
-    session.refresh(valid)
+    try:
+        session.commit()
+        session.refresh(valid)
+    except IntegrityError as e:
+        session.rollback()
+        logger.error("Database integrity error: %s", str(e))
+        raise HTTPException(
+            status_code=409,
+            detail="Resource already exists or constraint violation",
+        ) from e
     return valid
 
 
@@ -172,9 +242,15 @@ def get_data_by_date(
             status_code=400, detail="End date must be after start date"
         )
 
-    sensor: Sensor = session.exec(
+    sensor: Sensor | None = session.exec(
         select(Sensor).where(Sensor.uid == sensor_uid)
-    ).one()
+    ).first()
+
+    if not sensor:
+        raise HTTPException(
+            status_code=404, detail=f"Sensor with uid '{sensor_uid}' not found"
+        )
+
     sensor_data: list[SensorData] = session.exec(
         select(SensorData).where(
             SensorData.sensor_id == sensor.id,
@@ -183,7 +259,10 @@ def get_data_by_date(
         )
     ).all()
 
-    # Logging/printing for debug during tests
-    print(sensor_data)
+    logger.debug(
+        "Retrieved %d sensor data records for sensor %s",
+        len(sensor_data),
+        sensor_uid,
+    )
 
     return sensor_data

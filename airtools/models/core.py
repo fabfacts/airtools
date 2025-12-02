@@ -12,8 +12,8 @@ class SensorOut(BaseModel):
 
     uid: str
     name: str
-    lon: str
-    lat: str
+    lon: float
+    lat: float
     city: str
 
 
@@ -80,8 +80,8 @@ class Sensor(SQLModel, table=True):  # type: ignore
     id: int | None = Field(default=None, primary_key=True)
     uid: str = Field(unique=True)
     name: str
-    lon: str
-    lat: str
+    lon: float = Field(ge=-180.0, le=180.0)
+    lat: float = Field(ge=-90.0, le=90.0)
     city: str
     user_id: int | None = Field(foreign_key="user.id")
     user: User = Relationship(back_populates="sensors")
@@ -100,7 +100,7 @@ class SensorData(SQLModel, table=True):  # type: ignore
     """
 
     id: int | None = Field(default=None, primary_key=True)
-    timestamp: datetime = Field(unique=True)
+    timestamp: datetime
     temperature: float
     humidity: float
     sensor_id: int = Field(foreign_key="sensor.id")

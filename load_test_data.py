@@ -43,24 +43,24 @@ with Session(engine) as session:
     sens1 = Sensor(
         uid="88359",
         name="dht22",
-        lon="1.1111",
-        lat="1.2222",
+        lon=1.1111,
+        lat=1.2222,
         city="Alessandria",
     )
 
     sens2 = Sensor(
         uid="22222",
         name="sens2",
-        lon="1.1111",
-        lat="1.2222",
+        lon=1.1111,
+        lat=1.2222,
         city="Alessandria",
     )
 
     sens3 = Sensor(
         uid="33333",
         name="sens3",
-        lon="1.1111",
-        lat="1.2222",
+        lon=1.1111,
+        lat=1.2222,
         city="Alessandria",
     )
 
@@ -95,8 +95,8 @@ with Session(engine) as session:
 
         sensor_data = SensorData(
             timestamp=datetime.strptime(row["timestamp"], "%Y-%m-%dT%H:%M:%S"),
-            temperature=row["temperature"],
-            humidity=row["humidity"],
+            temperature=float(row["temperature"]),
+            humidity=float(row["humidity"]),
             sensor_id=sensor.id,
         )
 
